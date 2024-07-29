@@ -13,7 +13,10 @@ terraform {
 # ---------------------------------------------------------------------------------------------------------------------
 
 resource "aws_autoscaling_group" "autoscaling_group" {
-  launch_configuration = aws_launch_configuration.launch_configuration.name
+  launch_template {
+    id      = aws_launch_template.launch_template.id
+    version = var.launch_template_version # by default, this will be "$Latest"
+  } 
 
   name                = var.asg_name
   availability_zones  = var.availability_zones
@@ -65,61 +68,118 @@ resource "aws_autoscaling_group" "autoscaling_group" {
   }
 }
 
+# marking the below section as obsolete and replacing with aws_launch_template
 # ---------------------------------------------------------------------------------------------------------------------
 # CREATE LAUNCH CONFIGURATION TO DEFINE WHAT RUNS ON EACH INSTANCE IN THE ASG
 # ---------------------------------------------------------------------------------------------------------------------
 
-resource "aws_launch_configuration" "launch_configuration" {
+# resource "aws_launch_configuration" "launch_configuration" {
+#   name_prefix   = "${var.cluster_name}-"
+#   image_id      = var.ami_id
+#   instance_type = var.instance_type
+#   user_data     = var.user_data
+
+#   iam_instance_profile = var.enable_iam_setup ? element(
+#     concat(aws_iam_instance_profile.instance_profile.*.name, [""]),
+#     0,
+#   ) : var.iam_instance_profile_name
+#   key_name = var.ssh_key_name
+
+#   security_groups = concat(
+#     [aws_security_group.lc_security_group.id],
+#     var.security_groups,
+#   )
+#   placement_tenancy           = var.tenancy
+#   associate_public_ip_address = var.associate_public_ip_address
+
+#   ebs_optimized = var.root_volume_ebs_optimized
+
+#   root_block_device {
+#     volume_type           = var.root_volume_type
+#     volume_size           = var.root_volume_size
+#     delete_on_termination = var.root_volume_delete_on_termination
+#   }
+
+#   dynamic "ebs_block_device" {
+#     for_each = var.ebs_block_devices
+
+#     content {
+#       device_name           = ebs_block_device.value["device_name"]
+#       volume_size           = ebs_block_device.value["volume_size"]
+#       snapshot_id           = lookup(ebs_block_device.value, "snapshot_id", null)
+#       iops                  = lookup(ebs_block_device.value, "iops", null)
+#       encrypted             = lookup(ebs_block_device.value, "encrypted", null)
+#       delete_on_termination = lookup(ebs_block_device.value, "delete_on_termination", null)
+#     }
+#   }
+
+#   # Important note: whenever using a launch configuration with an auto scaling group, you must set
+#   # create_before_destroy = true. However, as soon as you set create_before_destroy = true in one resource, you must
+#   # also set it in every resource that it depends on, or you'll get an error about cyclic dependencies (especially when
+#   # removing resources). For more info, see:
+#   #
+#   # https://www.terraform.io/docs/providers/aws/r/launch_configuration.html
+#   # https://terraform.io/docs/configuration/resources.html
+#   lifecycle {
+#     create_before_destroy = true
+#   }
+# }
+
+# ---------------------------------------------------------------------------------------------------------------------
+# CREATE A LAUNCH TEMPLATE TO TO DEFINE WHAT RUNS ON EACH INSTANCE IN THE ASG
+# ---------------------------------------------------------------------------------------------------------------------
+
+
+resource "aws_launch_template" "launch_template" {
   name_prefix   = "${var.cluster_name}-"
   image_id      = var.ami_id
   instance_type = var.instance_type
-  user_data     = var.user_data
+  user_data     = base64encode(var.user_data)
 
-  iam_instance_profile = var.enable_iam_setup ? element(
-    concat(aws_iam_instance_profile.instance_profile.*.name, [""]),
-    0,
-  ) : var.iam_instance_profile_name
   key_name = var.ssh_key_name
 
-  security_groups = concat(
+  iam_instance_profile {
+    name = var.enable_iam_setup ? element(
+      concat(aws_iam_instance_profile.instance_profile.*.name, [""]),
+      0,
+    ) : var.iam_instance_profile_name
+  }
+
+  vpc_security_group_ids = concat(
     [aws_security_group.lc_security_group.id],
     var.security_groups,
   )
-  placement_tenancy           = var.tenancy
-  associate_public_ip_address = var.associate_public_ip_address
 
-  ebs_optimized = var.root_volume_ebs_optimized
-
-  root_block_device {
-    volume_type           = var.root_volume_type
-    volume_size           = var.root_volume_size
-    delete_on_termination = var.root_volume_delete_on_termination
+  placement {
+    tenancy = var.tenancy
   }
 
-  dynamic "ebs_block_device" {
-    for_each = var.ebs_block_devices
+  block_device_mappings {
+    device_name = var.root_device_name
 
-    content {
-      device_name           = ebs_block_device.value["device_name"]
-      volume_size           = ebs_block_device.value["volume_size"]
-      snapshot_id           = lookup(ebs_block_device.value, "snapshot_id", null)
-      iops                  = lookup(ebs_block_device.value, "iops", null)
-      encrypted             = lookup(ebs_block_device.value, "encrypted", null)
-      delete_on_termination = lookup(ebs_block_device.value, "delete_on_termination", null)
+    ebs {
+      volume_size           = var.root_volume_size
+      volume_type           = var.root_volume_type # Can be one of standard, gp2, gp3,
+      delete_on_termination = var.root_volume_delete_on_termination
+      encrypted             = var.root_volume_encrypted
     }
   }
 
-  # Important note: whenever using a launch configuration with an auto scaling group, you must set
-  # create_before_destroy = true. However, as soon as you set create_before_destroy = true in one resource, you must
-  # also set it in every resource that it depends on, or you'll get an error about cyclic dependencies (especially when
-  # removing resources). For more info, see:
-  #
-  # https://www.terraform.io/docs/providers/aws/r/launch_configuration.html
-  # https://terraform.io/docs/configuration/resources.html
+ dynamic "instance_market_options" {
+    for_each = var.spot_price != null ? [1] : []
+    content {
+      market_type = "spot"
+      spot_options {
+        max_price = var.spot_price
+      }
+    }
+  }
+
   lifecycle {
     create_before_destroy = true
   }
 }
+
 
 # ---------------------------------------------------------------------------------------------------------------------
 # CREATE A SECURITY GROUP TO CONTROL WHAT REQUESTS CAN GO IN AND OUT OF EACH EC2 INSTANCE

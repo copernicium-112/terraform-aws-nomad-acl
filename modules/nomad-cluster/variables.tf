@@ -18,6 +18,13 @@ variable "instance_type" {
   type        = string
 }
 
+variable "spot_price" {
+  description = "The maximum hourly price to pay for EC2 Spot Instances."
+  type        = number
+  default     = null
+}
+
+
 variable "vpc_id" {
   description = "The ID of the VPC in which to deploy the cluster"
   type        = string
@@ -113,6 +120,13 @@ variable "tenancy" {
   default     = "default"
 }
 
+variable "root_device_name" {
+  description = "The device name of the root device volume"
+  type        = string
+  default     = "/dev/sda1"
+}
+
+
 variable "root_volume_ebs_optimized" {
   description = "If true, the launched EC2 instance will be EBS-optimized."
   type        = bool
@@ -136,6 +150,19 @@ variable "root_volume_delete_on_termination" {
   default     = true
   type        = bool
 }
+
+variable "root_volume_encrypted" {
+  description = "Encrypt the root volume at rest"
+  type        = bool
+  default     = false
+}
+
+variable "launch_template_version" {
+  description = "The version of the launch template to use. If not provided, the latest version will be used."
+  type        = string
+  default     = "$Latest"  
+}
+
 
 variable "wait_for_capacity_timeout" {
   description = "A maximum duration that Terraform should wait for ASG instances to be healthy before timing out. Setting this to '0' causes Terraform to skip all Capacity Waiting behavior."
@@ -251,9 +278,9 @@ variable "acl_store_type" {
   type        = string
   default     = ""
   validation {
-    condition     = contains(["ssm",""],var.acl_store_type)
+    condition     = contains(["ssm", ""], var.acl_store_type)
     error_message = "You must specify a supported store type for ACL tokens. Currently the only allowed value is 'ssm'."
-  } 
+  }
 }
 variable "enable_iam_setup" {
   description = "If true, create the IAM Role, IAM Instance Profile, and IAM Policies. If false, these will not be created, and you can pass in your own IAM Instance Profile via var.iam_instance_profile_name."

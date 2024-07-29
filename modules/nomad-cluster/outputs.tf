@@ -14,20 +14,20 @@ output "cluster_size" {
   value = aws_autoscaling_group.autoscaling_group.desired_capacity
 }
 
-output "launch_config_name" {
-  value = aws_launch_configuration.launch_configuration.name
+output "launch_template_name" {
+  value = aws_launch_template.launch_template.name
 }
 
 output "iam_instance_profile_arn" {
-  value = element(concat(aws_iam_instance_profile.instance_profile.*.arn, [""]), 0) 
+  value = element(concat(aws_iam_instance_profile.instance_profile.*.arn, [""]), 0)
 }
 
 output "iam_instance_profile_id" {
-  value = element(concat(aws_iam_instance_profile.instance_profile.*.id, [""]), 0) 
+  value = element(concat(aws_iam_instance_profile.instance_profile.*.id, [""]), 0)
 }
 
 output "iam_instance_profile_name" {
-  value = element(concat(aws_iam_instance_profile.instance_profile.*.name, [""]), 0) 
+  value = element(concat(aws_iam_instance_profile.instance_profile.*.name, [""]), 0)
 }
 
 output "iam_role_arn" {
